@@ -1,13 +1,18 @@
 #include "stack.h"
 
-const char *DOTFILE = ".git-stack";
-
+char *DOTFILE = ".git-stack";
 void usage();
+void chomp(char *in, int length);
 int loadfromfile(const char *filename);
 int writetofile(const char *filename);
 
 void usage() {
   printf("usage: ./git-stack push|pop|peek <branchname>\n");
+}
+
+void chomp(char *in, int length) {
+  if (in[length-1] == '\n')
+    in[length-1] = '\0';
 }
 
 int loadfromfile(const char *filename) {
@@ -18,7 +23,7 @@ int loadfromfile(const char *filename) {
   // check if file exists.
   // if it doesn't, that's okay, return 0.
   // if it does, read it and load the stack.
-  if (!access(filename, F_OK)) {
+  if (access(filename, F_OK) == -1) {
     return 0;
   }
 
@@ -37,8 +42,11 @@ int loadfromfile(const char *filename) {
       retcode = 1;
       break;
     }
-    push(buf); // call to stack.h's push() to load the stack with the read value.
-    memset(buf, 0, sizeof(buf));
+    // Actually important that strlen() is called twice here.
+    // This is because the length could be changed after calling chomp()
+    chomp(buf, strlen(buf));
+    if(push(buf, strlen(buf)) == -1); // call to stack.h's push() to load the stack with the read value.
+    memset(buf, 0, 256);
   }
 
   fclose(fin); // Do i care about an error here? Probably not.
@@ -46,20 +54,32 @@ int loadfromfile(const char *filename) {
 }
 
 int writetofile(const char *filename) {
+  FILE *fout;
   int retcode = 0;
 
-  // todo:
-  // write contents of stack to file
+  // open the file for writing
+  fout = fopen(filename, "w");
+  if (fout == NULL) {
+    perror("err fopen");
+    return 1;
+  }
+
+  // Loop until stack is empty.
+  // Important to read stack in reverse order to write into file.
+  for(int i = 0; i <= stackdepth(); i++) {
+    char *item = at(i);
+    if (item == NULL)
+      break;
+
+    // todo: write to file...
+    fprintf(fout, "%s\n", item);
+  }
 
   return retcode;
 }
 
 int main(int argc, char *argv[]) {
 
-  // todo:
-  // do operation 
-  // write file
-  
   if (argc <= 1) {
     usage();
     return 1;
@@ -77,19 +97,27 @@ int main(int argc, char *argv[]) {
   // perform operation
   char *data;
   if (strcmp(operation, "push") == 0) {
-    push(branch);
+    push(branch, strlen(branch));
   } else if (strcmp(operation, "pop") == 0) {
     data = pop();
-    printf("%s\n", data);
-    free(data);
+    if (data != NULL) {
+      printf("%s", data);
+      free(data);
+    }
   } else if (strcmp(operation, "peek") == 0) {
     data = peek();
-    printf("%s\n", data);
+    if (data != NULL) {
+      printf("%s", data);
+      free(data);
+    }
   }
 
-  // write modified stack to DOTFILE
-  // writetofile(DOTFILE);
+  int ret = 0;
+  ret = writetofile(DOTFILE);
+  if(ret == -1) {
+    printf("error writing to dotfile: %s\n", DOTFILE);
+  }
 
-  // todo: free stack memory
-  return 0;
+  destroystack();
+  return ret;
 }
